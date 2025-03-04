@@ -1,14 +1,18 @@
-// This is a polyfill for nanoid/non-secure
-// It provides the same API as nanoid/non-secure but uses a simple implementation
+// This is a polyfill for nanoid
+// It provides a compatible API with nanoid v5
 // that works in all environments
 
+const urlAlphabet = 'useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict';
+
 function nanoid(size = 21) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let id = '';
-  for (let i = 0; i < size; i++) {
-    id += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  let i = size;
+  while (i--) {
+    id += urlAlphabet[(Math.random() * 64) | 0];
   }
   return id;
 }
 
-module.exports = nanoid;
+// Export in the format expected by nanoid v5
+module.exports = { nanoid };
+module.exports.nanoid = nanoid;

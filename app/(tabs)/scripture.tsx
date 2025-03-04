@@ -1,85 +1,218 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Heart, Share2, BookOpen, ChevronRight, User } from 'lucide-react-native';
+import { User, Book, Search, BookOpen } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import BibleVerseComponent from '../components/BibleVerse';
+import BibleSearch from '../components/BibleSearch';
+import BibleView from '../components/BibleView';
+import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import { useBibleDatabase, Scripture, BibleVerse } from '../../lib/hooks/useBibleDatabase';
+
+type ScriptureView = 'daily' | 'bible';
 
 export default function ScriptureScreen() {
-  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const [dailyScripture, setDailyScripture] = useState<Scripture | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedSearchVerse, setSelectedSearchVerse] = useState<BibleVerse | null>(null);
+  const [currentView, setCurrentView] = useState<ScriptureView>('daily');
+
+  const { 
+    isLoading: dbLoading, 
+    error: dbError, 
+    isInitialized,
+    getDailyScripture,
+    getVerse,
+    searchVerses
+  } = useBibleDatabase();
+
+  useEffect(() => {
+    const loadScripture = async () => {
+      try {
+        if (isInitialized && !dailyScripture) {
+          console.log('Loading daily scripture...');
+          setLoading(true);
+          
+          const scripture = await getDailyScripture();
+          console.log('Daily scripture retrieved:', scripture);
+          
+          setDailyScripture(scripture);
+          setError(null);
+        }
+      } catch (e: any) {
+        console.error('Error loading daily scripture:', e);
+        setError('Failed to load daily scripture');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadScripture();
+  }, [isInitialized, getDailyScripture, dailyScripture]);
 
   const handleSave = () => {
-    setSaved(!saved);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Save functionality would be implemented here
   };
+
+  const handleShare = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!dailyScripture) return;
+    
+    const reference = `${dailyScripture.book_name} ${dailyScripture.chapter}:${dailyScripture.verse}`;
+    const shareText = `"${dailyScripture.text}" - ${reference}\n\nShared from Purity app`;
+    
+    try {
+      // In a real app, you would use a proper sharing implementation
+      // that works on all platforms
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(shareText);
+      }
+    } catch (error) {
+      console.error('Error sharing verse:', error);
+    }
+  };
+
+  const handleReadContext = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Navigate to full chapter view would be implemented here
+    // router.push(`/bible/${dailyScripture.verse.book_id}/${dailyScripture.verse.chapter}`);
+  };
+
+  const handleSearchToggle = () => {
+    setShowSearch(!showSearch);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleSelectSearchVerse = (verse: BibleVerse) => {
+    setSelectedSearchVerse(verse);
+    setShowSearch(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const toggleView = () => {
+    setCurrentView(currentView === 'daily' ? 'bible' : 'daily');
+    setShowSearch(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const formatDate = () => {
+    const options: Intl.DateTimeFormatOptions = { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    };
+    return new Date().toLocaleDateString('en-US', options).toUpperCase();
+  };
+
+  if (dbLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+        <ActivityIndicator size="large" color="#d9b64e" />
+        <Text style={styles.loadingText}>Loading today's scripture...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.errorContainer} edges={['top']}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={() => {
+            setError(null);
+            setLoading(true);
+            // Retry loading logic here
+          }}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Daily Scripture</Text>
-        <TouchableOpacity style={styles.profileButton}>
-          <User size={20} color="#d9b64e" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {currentView === 'daily' ? 'Daily Scripture' : 'Bible'}
+        </Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={toggleView}
+          >
+            {currentView === 'daily' ? (
+              <BookOpen size={20} color="#d9b64e" />
+            ) : (
+              <Book size={20} color="#d9b64e" />
+            )}
+          </TouchableOpacity>
+          {currentView === 'daily' && (
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={handleSearchToggle}
+            >
+              {showSearch ? (
+                <Book size={20} color="#d9b64e" />
+              ) : (
+                <Search size={20} color="#d9b64e" />
+              )}
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.profileButton}>
+            <User size={20} color="#d9b64e" />
+          </TouchableOpacity>
+        </View>
       </View>
       
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.dateContainer}>
-          <Text style={styles.date}>JUNE 15, 2025</Text>
+      {currentView === 'bible' ? (
+        <BibleView />
+      ) : showSearch ? (
+        <View style={styles.searchContainer}>
+          <BibleSearch onSelectVerse={handleSelectSearchVerse} />
         </View>
-        
-        <View style={styles.scriptureCard}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80' }} 
-            style={styles.scriptureImage}
-          />
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.dateContainer}>
+            <Text style={styles.date}>{formatDate()}</Text>
+          </View>
           
-          <View style={styles.scriptureContent}>
-            <Text style={styles.scriptureVerse}>"Blessed are the pure in heart, for they will see God."</Text>
-            <Text style={styles.scriptureReference}>Matthew 5:8</Text>
-            
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
-                <Heart size={20} color={saved ? '#ef4444' : '#a89a5b'} fill={saved ? '#ef4444' : 'transparent'} />
-                <Text style={styles.actionButtonText}>Save</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.actionButton}>
-                <Share2 size={20} color="#a89a5b" />
-                <Text style={styles.actionButtonText}>Share</Text>
-              </TouchableOpacity>
+          {selectedSearchVerse ? (
+            <BibleVerseComponent
+              verse={selectedSearchVerse}
+              onPressSave={handleSave}
+              onPressShare={handleShare}
+              onPressReadContext={handleReadContext}
+            />
+          ) : dailyScripture ? (
+            <BibleVerseComponent
+              verse={{
+                id: -1,
+                book_id: -1,
+                chapter: dailyScripture.chapter,
+                verse: dailyScripture.verse,
+                text: dailyScripture.text,
+                book_name: dailyScripture.book_name
+              }}
+              title="Daily Scripture"
+              application="Apply this verse to your life today."
+              onPressSave={handleSave}
+              onPressShare={handleShare}
+              onPressReadContext={handleReadContext}
+            />
+          ) : (
+            <View style={styles.noScriptureContainer}>
+              <Text style={styles.noScriptureText}>No scripture available for today. Please check back later.</Text>
             </View>
-          </View>
-        </View>
-        
-        <TouchableOpacity style={styles.contextButton}>
-          <View style={styles.contextButtonContent}>
-            <BookOpen size={20} color="#d9b64e" />
-            <Text style={styles.contextButtonText}>Read in Context</Text>
-          </View>
-          <ChevronRight size={20} color="#a89a5b" />
-        </TouchableOpacity>
-        
-        <View style={styles.applicationSection}>
-          <Text style={styles.sectionTitle}>Application</Text>
-          <Text style={styles.applicationText}>
-            Jesus teaches that purity of heart is essential for spiritual sight. In our digital age, this means guarding what we allow our eyes to see and our minds to dwell on. Today, practice intentional media consumption by:
-          </Text>
-          
-          <View style={styles.applicationPoints}>
-            <View style={styles.applicationPoint}>
-              <View style={styles.pointDot} />
-              <Text style={styles.pointText}>Taking a moment to pray before opening social media</Text>
-            </View>
-            
-            <View style={styles.applicationPoint}>
-              <View style={styles.pointDot} />
-              <Text style={styles.pointText}>Immediately closing content that triggers impure thoughts</Text>
-            </View>
-            
-            <View style={styles.applicationPoint}>
-              <View style={styles.pointDot} />
-              <Text style={styles.pointText}>Replacing lustful thoughts with meditation on God's word</Text>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -104,6 +237,19 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#d9b64e',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fce59f',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
   profileButton: {
     width: 40,
     height: 40,
@@ -114,9 +260,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    paddingHorizontal: 20,
+  },
+  searchContainer: {
+    flex: 1,
+    padding: 20,
   },
   dateContainer: {
-    paddingHorizontal: 20,
     paddingVertical: 16,
   },
   date: {
@@ -126,131 +276,56 @@ const styles = StyleSheet.create({
     color: '#a89a5b',
     letterSpacing: 1,
   },
-  scriptureCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
-    elevation: 2,
-  },
-  scriptureImage: {
-    width: '100%',
-    height: 180,
-  },
-  scriptureContent: {
-    padding: 20,
-  },
-  scriptureVerse: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontWeight: '600',
-    fontSize: 20,
-    color: '#5c5436',
-    lineHeight: 28,
-    marginBottom: 8,
-  },
-  scriptureReference: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 16,
-    color: '#a89a5b',
-    marginBottom: 20,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#f0e8c9',
-    paddingTop: 16,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  actionButtonText: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 14,
-    color: '#a89a5b',
-    marginLeft: 6,
-  },
-  contextButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 1,
-  },
-  contextButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  contextButtonText: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontWeight: '500',
-    fontSize: 16,
-    color: '#5c5436',
-    marginLeft: 12,
-  },
-  applicationSection: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 1,
-  },
-  sectionTitle: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontWeight: '600',
-    fontSize: 18,
-    color: '#5c5436',
-    marginBottom: 12,
-  },
-  applicationText: {
-    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
-    fontSize: 16,
-    color: '#5c5436',
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  applicationPoints: {
-    marginTop: 8,
-  },
-  applicationPoint: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  pointDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#d9b64e',
-    marginTop: 8,
-    marginRight: 12,
-  },
-  pointText: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f7eed2',
+  },
+  loadingText: {
+    marginTop: 16,
     fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
     fontSize: 16,
-    color: '#5c5436',
-    lineHeight: 24,
+    color: '#a89a5b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f7eed2',
+    padding: 20,
+  },
+  errorText: {
+    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#e35c5c',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#d9b64e',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  noScriptureContainer: {
+    padding: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
+  noScriptureText: {
+    fontFamily: Platform.OS === 'web' ? 'system-ui, sans-serif' : undefined,
+    fontSize: 16,
+    color: '#a89a5b',
+    textAlign: 'center',
   },
 });

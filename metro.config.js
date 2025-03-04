@@ -20,12 +20,13 @@ config.maxWorkers = 4;
 // Increase transformer and resolver timeouts
 config.transformerPath = require.resolve('metro-transform-worker');
 config.resolver.resolverMainFields = ['browser', 'main'];
-config.resolver.sourceExts = ['js', 'jsx', 'ts', 'tsx', 'json'];
-config.resolver.assetExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ttf'];
+config.resolver.sourceExts = ['js', 'jsx', 'ts', 'tsx', 'json', 'cjs'];
+config.resolver.assetExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ttf', 'db'];
 
-// Fix nanoid resolution
-config.resolver.extraNodeModules = {
-  'nanoid/non-secure': path.resolve(__dirname, 'node_modules/nanoid/non-secure/index.js')
+// Updated configuration for nanoid v5
+config.resolver.alias = {
+  ...config.resolver.alias,
+  'nanoid': path.resolve(__dirname, 'node_modules/nanoid')
 };
 
 module.exports = config;

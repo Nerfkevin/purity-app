@@ -57,7 +57,7 @@ export default function EmergencyResponseScreen() {
   useEffect(() => {
     if (section !== 'breathing') return;
     
-    let animation;
+    let animation: Animated.CompositeAnimation | undefined;
     
     if (breathPhase === 'inhale') {
       // Inhale - expand circle
@@ -74,25 +74,11 @@ export default function EmergencyResponseScreen() {
         duration: BREATH_DURATION,
         useNativeDriver: false,
       }).start();
-    } 
-    else if (breathPhase === 'hold1' || breathPhase === 'hold2') {
-      // Hold - maintain circle size
-      animation = Animated.timing(breathAnimation, {
-        toValue: breathPhase === 'hold1' ? 1 : 0,
-        duration: BREATH_DURATION,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      });
-      
-      // For hold1, keep cool blue; for hold2, keep warm color
-      Animated.timing(backgroundColorAnim, {
-        toValue: breathPhase === 'hold1' ? 0 : 1,
-        duration: BREATH_DURATION,
-        useNativeDriver: false,
-      }).start();
-    } 
-    else if (breathPhase === 'exhale') {
-      // Exhale - contract circle
+    } else if (breathPhase === 'hold1') {
+      // Hold breath
+      animation = Animated.delay(BREATH_DURATION);
+    } else if (breathPhase === 'exhale') {
+      // Exhale - shrink circle
       animation = Animated.timing(breathAnimation, {
         toValue: 0,
         duration: BREATH_DURATION,
@@ -106,33 +92,40 @@ export default function EmergencyResponseScreen() {
         duration: BREATH_DURATION,
         useNativeDriver: false,
       }).start();
+    } else if (breathPhase === 'hold2') {
+      // Hold after exhale
+      animation = Animated.delay(BREATH_DURATION);
     }
     
-    animation.start(({ finished }) => {
-      if (finished) {
-        // Cycle through breath phases
-        if (breathPhase === 'inhale') {
-          setBreathPhase('hold1');
-        } else if (breathPhase === 'hold1') {
-          setBreathPhase('exhale');
-        } else if (breathPhase === 'exhale') {
-          setBreathPhase('hold2');
-        } else if (breathPhase === 'hold2') {
-          setBreathPhase('inhale');
-          setBreathCount(prev => {
-            const newCount = prev + 1;
-            // After 3 complete breath cycles, allow proceeding to verses
-            if (newCount >= 3) {
-              setCanProceed(true);
-            }
-            return newCount;
-          });
+    if (animation) {
+      animation.start(({ finished }) => {
+        if (finished) {
+          // Cycle through breath phases
+          if (breathPhase === 'inhale') {
+            setBreathPhase('hold1');
+          } else if (breathPhase === 'hold1') {
+            setBreathPhase('exhale');
+          } else if (breathPhase === 'exhale') {
+            setBreathPhase('hold2');
+          } else if (breathPhase === 'hold2') {
+            setBreathPhase('inhale');
+            setBreathCount(prev => {
+              const newCount = prev + 1;
+              // After 3 complete breath cycles, allow proceeding to verses
+              if (newCount >= 3) {
+                setCanProceed(true);
+              }
+              return newCount;
+            });
+          }
         }
-      }
-    });
+      });
+    }
     
     return () => {
-      animation.stop();
+      if (animation) {
+        animation.stop();
+      }
     };
   }, [breathPhase, section]);
   
